@@ -1,0 +1,50 @@
+-- TimeUtil Module
+-- Provides functions to calculate time to reach a position
+
+local TimeUtil = {}
+
+--[[
+	Basic Time-To-Reach
+	Params:
+		fromPos: Vector3 - starting position
+		toPos: Vector3 - target position
+		speed: number - studs per second
+	Returns: number - time in seconds
+]]
+function TimeUtil.TimeToReach(fromPos: Vector3, toPos: Vector3, speed: number)
+	if speed <= 0 then
+		return math.huge
+	end
+	return (toPos - fromPos).Magnitude / speed
+end
+
+--[[
+	Time-To-Reach with moving target (iterative prediction)
+	Params:
+		fromPos: Vector3 - starting position
+		targetPos: Vector3 - current target position
+		targetVelocity: Vector3 - target movement per second
+		speed: number - your speed in studs/sec
+		iterations: number? - optional, default 3
+	Returns: number - predicted time in seconds
+]]
+function TimeUtil.TimeToReachMoving(
+	fromPos: Vector3,
+	targetPos: Vector3,
+	targetVelocity: Vector3,
+	speed: number,
+	iterations: number?
+)
+	iterations = iterations or 3
+
+	local time = (targetPos - fromPos).Magnitude / speed
+
+	for _ = 1, iterations do
+		local predictedPos = targetPos + targetVelocity * time
+		time = (predictedPos - fromPos).Magnitude / speed
+	end
+
+	return time
+end
+
+return TimeUtil

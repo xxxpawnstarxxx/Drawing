@@ -1,0 +1,887 @@
+-- Gui to Lua
+-- Version: 3.2
+
+-- Instances:
+
+local y = Instance.new("ScreenGui")
+local Graph = Instance.new("Frame")
+local TextBox = Instance.new("TextBox")
+local TextButton = Instance.new("TextButton")
+
+--Properties:
+
+y.Name = "y"
+y.Parent = game.Workspace
+y.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
+
+Graph.Name = "Graph"
+Graph.Parent = y
+Graph.BackgroundColor3 = Color3.fromRGB(10, 16, 13)
+Graph.BorderColor3 = Color3.fromRGB(27, 42, 53)
+Graph.BorderSizePixel = 0
+Graph.Size = UDim2.new(1, 0, 1, -50)
+
+TextBox.Parent = y
+TextBox.AnchorPoint = Vector2.new(0, 1)
+TextBox.BackgroundColor3 = Color3.fromRGB(18, 29, 23)
+TextBox.BorderColor3 = Color3.fromRGB(27, 42, 53)
+TextBox.BorderSizePixel = 0
+TextBox.Position = UDim2.new(0, 0, 1, 0)
+TextBox.Size = UDim2.new(1, -50, 0, 50)
+TextBox.ClearTextOnFocus = false
+TextBox.Font = Enum.Font.SourceSans
+TextBox.Text = ""
+TextBox.TextColor3 = Color3.fromRGB(255, 255, 255)
+TextBox.TextSize = 32.000
+TextBox.TextWrapped = true
+TextBox.TextXAlignment = Enum.TextXAlignment.Left
+
+TextButton.Parent = y
+TextButton.AnchorPoint = Vector2.new(1, 1)
+TextButton.BackgroundColor3 = Color3.fromRGB(77, 108, 250)
+TextButton.BorderColor3 = Color3.fromRGB(27, 42, 53)
+TextButton.BorderSizePixel = 0
+TextButton.Position = UDim2.new(1, 0, 1, 0)
+TextButton.Size = UDim2.new(0, 50, 0, 50)
+TextButton.Font = Enum.Font.SourceSansBold
+TextButton.Text = "Graph"
+TextButton.TextColor3 = Color3.fromRGB(255, 208, 70)
+TextButton.TextScaled = true
+TextButton.TextSize = 14.000
+TextButton.TextWrapped = true
+
+-- Module Scripts:
+
+local fake_module_scripts = {}
+
+do -- nil.Graph
+	local script = Instance.new('ModuleScript', nil)
+	script.Name = "Graph"
+	local function module_script()
+		--[=[
+		
+		API:
+		
+		function Graph.new(Frame)
+			returns a GraphHandler
+			
+		GraphHandler.Resolution = The number of points it renders
+		GraphHandler.BaselineZero = Whether the bottom of the graph should start at zero (or at the minimum value)
+		GraphHandler.Data = The dictionary of data sets
+			(Data must be a dictionary of arrays with no holes)
+			
+		function GraphHandler.Theme(ThemeDictionary)
+			Updates the Colors of the graph
+		
+		--]=]
+		
+		local TextService = game:GetService("TextService")
+		
+		local Graph = {}
+		
+		local Theme = {
+			Name = "Dark";
+			
+			Background = Color3.fromRGB(35,35,40);
+			LightBackground = Color3.fromRGB(45,45,50);
+			Text = Color3.fromRGB(220,220,230)
+		}
+		local isDark = true
+		
+		local function getKeyColor(name)
+			-- Shoutout to Vocksel for the core of this function
+			
+			local seed = 0
+			for i=1, #name do
+				seed = seed + (name:byte(i))
+			end
+			local rng = Random.new(seed)
+			local hue = rng:NextInteger(0,50)/50
+		
+			return Color3.fromHSV(hue, isDark and 0.63 or 1, isDark and 0.84 or 0.8)
+		end
+		
+		
+		function Graph.new(Frame)
+			if not Frame then error("Must give graph a frame") end
+			local GraphHandler = {Frame = Frame; Resolution = 75;}
+			
+			-- Private variables
+			local Busy = false
+			
+			-- Create the GUIs
+		
+			local Background = Instance.new("Frame")
+			Background.Name = "Background"
+			Background.BackgroundColor3 = Theme.Background
+			Background.Size = UDim2.new(1,0,1,0)
+			Background.Parent = GraphHandler.Frame
+		
+			local MarkerBG = Instance.new("Frame")
+			MarkerBG.Name = "MarkerBackground"
+			MarkerBG.Size = UDim2.new(0.1,0,1,0)
+			MarkerBG.BackgroundColor3 = Theme.LightBackground
+			MarkerBG.BorderSizePixel = 0
+			MarkerBG.ZIndex = 1
+			MarkerBG.Parent = GraphHandler.Frame
+		
+			local YMarkers = Instance.new("Frame")
+			YMarkers.Name = "Markers"
+			YMarkers.Size = UDim2.new(0.1,0,0.85,0)
+			YMarkers.Position = UDim2.new(0,0,0.15,0)
+			YMarkers.BackgroundTransparency = 1
+			YMarkers.BorderSizePixel = 0
+			YMarkers.ZIndex = 2
+			YMarkers.Parent = GraphHandler.Frame
+		
+			local GraphingFrame = Instance.new("Frame")
+			GraphingFrame.Name = "GraphingFrame"
+			GraphingFrame.Size = UDim2.new(0.9,0,0.85,0)
+			GraphingFrame.Position = UDim2.new(0.1,0,0.15,0)
+			GraphingFrame.BackgroundTransparency = 1
+			GraphingFrame.ZIndex = 4
+			GraphingFrame.Parent = GraphHandler.Frame
+			
+			local KeyNames = Instance.new("Frame")
+			KeyNames.Name = "KeyNames"
+			KeyNames.Size = UDim2.new(1,0,0.1,0)
+			KeyNames.Position = UDim2.new(0,0,0,0)
+			KeyNames.BackgroundColor3 = Theme.LightBackground
+			KeyNames.BorderSizePixel = 0
+			KeyNames.ZIndex = 4
+			KeyNames.Parent = GraphHandler.Frame
+			
+			-- Rerender if the frame changes size since our lines will be all wonky
+			GraphHandler.Frame:GetPropertyChangedSignal("AbsoluteSize"):Connect(function()
+				local Size = GraphHandler.Frame.AbsoluteSize
+				wait(0.04)
+				if Size == GraphHandler.Frame.AbsoluteSize then
+					GraphHandler.Render()
+				end
+			end)
+			
+			function GraphHandler.Theme(newTheme)
+				wait()
+				-- Make sure we have latest theme data
+				Theme = {
+					Name = newTheme.Name or "Dark";
+		
+					Background = newTheme.Background or Color3.fromRGB(46,46,46);
+					LightBackground = newTheme.LightBackground or Color3.fromRGB(70,70,70);
+					Text = newTheme.Text or Color3.fromRGB(220,220,230);
+				}
+				
+				-- Update GUIs
+				Background.BackgroundColor3 = Theme.Background
+				MarkerBG.BackgroundColor3 = Theme.LightBackground
+				KeyNames.BackgroundColor3 = Theme.LightBackground
+				
+				-- Redraw graph with new colors
+				GraphHandler.Render()
+			end
+			
+			function GraphHandler.Render()
+				-- Validate we have stuff to render
+				if not GraphHandler.Frame or not GraphHandler.Data or not GraphHandler.Resolution then
+					return
+				end
+				
+				while Busy do wait(0.1) end
+				Busy = true
+				
+				-- Clear old graph values
+				YMarkers:ClearAllChildren()
+				GraphingFrame:ClearAllChildren()
+				KeyNames:ClearAllChildren()
+				
+				local KeyLayout = Instance.new("UIListLayout")
+				KeyLayout.FillDirection = Enum.FillDirection.Horizontal
+				KeyLayout.HorizontalAlignment = Enum.HorizontalAlignment.Left
+				KeyLayout.VerticalAlignment = Enum.VerticalAlignment.Center
+				KeyLayout.Padding = UDim.new(0.01,0)
+				KeyLayout.Parent = KeyNames
+				
+				local Max, Min = -math.huge,math.huge
+				local Range
+				
+				-- Calculate our range of values
+		
+				for Key, Set in pairs(GraphHandler.Data) do
+					local SetAmount = #Set
+		
+					for i=1,SetAmount, math.ceil(SetAmount/GraphHandler.Resolution) do
+						local SortedChunk = {}
+						for x=i,i+math.ceil(SetAmount/GraphHandler.Resolution) do
+							SortedChunk[#SortedChunk+1] = Set[x]
+						end
+						table.sort(SortedChunk)
+		
+						local Value = SortedChunk[math.round(#SortedChunk*0.55)]
+						if not Value then continue end
+		
+						-- Record for our range calc
+						Min = math.min(Min, Value)
+						Max = math.max(Max, Value)
+					end
+				end
+				
+				if GraphHandler.BaselineZero then
+					Min = 0
+					Max = Max * 1.75
+				end
+		
+				Range = Max-Min
+				
+				-- Mark our Y axis values along the derived range
+				
+				for y=0,1,0.2 do
+					local Marker = Instance.new("TextLabel")
+					Marker.Name = y
+					Marker.Size = UDim2.new(1,0,0.08,0)
+					Marker.AnchorPoint = Vector2.new(0,0.5)
+					Marker.Position = UDim2.new(0,0,0.9 - (y*0.9),0)
+					Marker.Text = string.format("%.2f  ",(Min + (Range*y)))
+					Marker.TextXAlignment = Enum.TextXAlignment.Right
+		
+					Marker.TextColor3 = Theme.Text
+					Marker.Font = Enum.Font.SourceSans
+					Marker.BackgroundTransparency = 1
+					Marker.TextSize = (GraphHandler.Frame.AbsoluteSize.X*0.03)
+					Marker.ZIndex = 6
+					Marker.Parent = YMarkers
+				end
+				
+				-- Draw the graph at this range
+				local KeyColors = {}
+				for Key, Set in pairs(GraphHandler.Data) do
+					-- Designate a color for this dataset
+					KeyColors[Key] = getKeyColor(Key)
+					
+					local TextSize = GraphHandler.Frame.AbsoluteSize.Y*0.08
+					local Size = TextService:GetTextSize(Key, TextSize, Enum.Font.SourceSansSemibold, KeyNames.AbsoluteSize)
+					local KeyMarker = Instance.new("TextLabel")
+					KeyMarker.Text = Key
+					KeyMarker.TextColor3 = KeyColors[Key]
+					KeyMarker.Font = Enum.Font.SourceSansSemibold
+					KeyMarker.BackgroundTransparency = 1
+					KeyMarker.TextSize = TextSize
+					KeyMarker.Size = UDim2.new(0,Size.X+TextSize,1,0)
+					KeyMarker.Parent = KeyNames
+					
+					-- Graph the set
+		
+					local SetAmount = #Set
+					local LastPoint
+		
+					--print("  "..Key, Set)
+		
+					for i=1,SetAmount, math.ceil(SetAmount/GraphHandler.Resolution) do
+		
+						local SortedChunk = {}
+						for x=i,i+math.ceil(SetAmount/GraphHandler.Resolution) do
+							SortedChunk[#SortedChunk+1] = Set[x]
+						end
+						table.sort(SortedChunk)
+		
+						local Value = SortedChunk[math.round(#SortedChunk*0.55)]
+						if not Value then continue end
+		
+						-- Create the point
+						local Point = Instance.new("ImageLabel")
+						Point.Name = Key..i
+						Point.Position = UDim2.new(0.05+((i/SetAmount)*0.9),0, 0.9 - (((Value-Min)/Range)*0.9),0)
+						Point.AnchorPoint = Vector2.new(0.5,0.5)
+						Point.SizeConstraint = Enum.SizeConstraint.RelativeXX
+						Point.Size = UDim2.new(math.clamp(0.5/GraphHandler.Resolution, 0.003,0.016),0,math.clamp(0.5/GraphHandler.Resolution, 0.003,0.016),0)
+		
+						Point.ImageColor3 = KeyColors[Key]
+						Point.BorderSizePixel = 0
+						Point.BackgroundTransparency = 1
+						Point.Image = "rbxassetid://200182847"
+						Point.ZIndex = 15
+		
+						local Label = Instance.new("TextLabel")
+						Label.Visible = false
+						Label.Text = string.format("%.5f",Value)
+						Label.BackgroundColor3 = Theme.LightBackground
+						Label.TextColor3 = Theme.Text
+						Label.Position = UDim2.new(1,0,0.4,0)
+						Label.Font = Enum.Font.Code
+						Label.TextSize = (GraphHandler.Frame.AbsoluteSize.X*0.025)
+						Label.Size = UDim2.new(0,Label.TextSize * 0.6 * #Label.Text,0,Label.TextSize * 1.1)
+						Label.Parent = Point
+						Label.ZIndex = 20
+		
+						Point.MouseEnter:Connect(function()
+							Label.Visible = true
+						end)
+						Point.MouseLeave:Connect(function()
+							Label.Visible = false
+						end)
+		
+						-- Create the line
+						if LastPoint then
+							local Connector = Instance.new("Frame")
+							Connector.Name = Key..i.."-"..i-1
+							Connector.BackgroundColor3 = KeyColors[Key]
+							Connector.BorderSizePixel = 0
+							Connector.SizeConstraint = Enum.SizeConstraint.RelativeXX
+							Connector.AnchorPoint = Vector2.new(0.5, 0.5)
+		
+							local Size = GraphingFrame.AbsoluteSize
+							local startX, startY = Point.Position.X.Scale*Size.X, Point.Position.Y.Scale*Size.Y
+							local endX, endY = LastPoint.Position.X.Scale*Size.X, LastPoint.Position.Y.Scale*Size.Y
+		
+							local Distance = (Vector2.new(startX, startY) - Vector2.new(endX, endY)).Magnitude
+		
+							Connector.Size = UDim2.new(0, Distance, math.clamp(0.2/GraphHandler.Resolution, 0.002,0.0035), 0)
+							Connector.Position = UDim2.new(0, (startX + endX) / 2, 0, (startY + endY) / 2)
+							Connector.Rotation = math.atan2(endY - startY, endX - startX) * (180 / math.pi)
+		
+							Connector.Parent = GraphingFrame
+						end
+		
+						LastPoint = Point
+						Point.Parent = GraphingFrame
+		
+					end
+		
+				end
+				
+				Busy = false
+			end
+			
+			return setmetatable({}, {
+				__index = function(t,Key)
+					return GraphHandler[Key]
+				end;
+				__newindex = function(t, Key, Value)
+					if Key == "Data" and type(Value) == "table" then
+						GraphHandler.Data = Value
+						GraphHandler.Render()
+					elseif Key == "Resolution" and type(Value) == "number" then
+						GraphHandler.Resolution = math.clamp(Value, 3, 500)
+						GraphHandler.Render()
+					elseif Key == "BaselineZero" and type(Value) == "boolean" then
+						GraphHandler.BaselineZero = Value
+						GraphHandler.Render()
+					end
+				end;
+			})
+			
+		end
+		
+		
+		return Graph
+		
+	end
+	fake_module_scripts[script] = module_script
+end
+do -- nil.StringCalculator
+	local script = Instance.new('ModuleScript', nil)
+	script.Name = "StringCalculator"
+	local function module_script()
+		local LuaMathFuncs = {
+			
+			round = function ( Num, DecimalsPoints )
+			
+				local Mult = 10 ^ ( DecimalsPoints or 0 )
+				
+				return math.floor( Num * Mult + 0.5 ) / Mult
+			
+			end,
+			
+			truncate = function ( Num, DecimalsPoints )
+			
+				local Mult = 10 ^ ( DecimalsPoints or 0 )
+				
+				local FloorOrCeil = Num < 0 and math.ceil or math.floor
+			
+				return FloorOrCeil( Num * Mult ) / Mult
+			
+			end,
+		
+			approach = function ( Num, Target, Inc )
+			
+				Inc = math.abs( Inc )
+			
+				if ( Num < Target ) then
+			
+					return math.min( Num + Inc, Target )
+			
+				elseif ( Num > Target ) then
+			
+					return math.max( Num - Inc, Target )
+			
+				end
+			
+				return Target
+			
+			end
+			
+		}
+		
+		function MapArgs( Nums, Args )
+			
+			for _, Num in ipairs( Nums) do
+				
+				if type( Num ) == "table" then
+					
+					Num = MapArgs( Num, Args )
+					
+				elseif Args[ Num ] then
+					
+					Num = Args[ Num ]
+					
+				end
+				
+			end
+			
+			return Nums
+			
+		end
+		
+		function ToNumber( Nums, LocalFuncs, Attempt )
+			
+			local a = 1
+			
+			while a <= #Nums do
+				
+				if type( Nums[ a ] ) == "table" then
+					
+					local Prev = Nums[ a - 1 ]
+					
+					if Prev then
+						
+						if type( Prev ) == "number" then
+							
+							Nums[ a - 1 ] = Nums[ a - 1 ] * ToNumber( Nums[ a ], LocalFuncs )
+							
+							table.remove( Nums, a )
+							
+						elseif type( Prev ) == "function" or LocalFuncs[ Prev ] then
+							
+							local Args = { { } }
+							
+							for _, Arg in ipairs( Nums[ a ] ) do
+								
+								if Arg == "," then
+									
+									Args[ #Args ] = ToNumber( Args[ #Args ] )
+									
+									Args[ #Args + 1 ] = { }
+									
+								else
+									
+									Args[ #Args ][ #Args[ #Args ] + 1 ] = Arg
+									
+								end
+								
+							end
+							
+							Args[ #Args ] = ToNumber( Args[ #Args ], LocalFuncs )
+							
+							if type( Prev ) == "function" then
+								
+								Nums[ a - 1 ] = Prev( unpack( Args ) )
+								
+							elseif type( LocalFuncs[ Prev ] ) == "number" then
+								
+								Nums[ a - 1 ] = LocalFuncs[ Prev ]
+								
+							else
+								
+								local MappedArgs = { }
+								
+								for _, Func in ipairs( LocalFuncs[ Prev ][ 2 ] ) do
+									
+									MappedArgs[ Func[ a ] ] = Args[ a ]
+									
+								end
+								
+								local Func = MapArgs( LocalFuncs[ Prev ][ 1 ], MappedArgs )
+								
+								Nums[ a - 1 ] = ToNumber( Func, LocalFuncs, Attempt )
+								
+							end
+							
+							table.remove( Nums, a )
+							
+						else
+							
+							Nums[ a ] = ToNumber( Nums[ a ], LocalFuncs, Attempt )
+							
+							a = a + 1
+							
+						end
+						
+					else
+						
+						Nums[ a ] = ToNumber( Nums[ a ], LocalFuncs, Attempt )
+						
+						a = a + 1
+						
+					end
+					
+				else
+					
+					a = a + 1
+					
+				end
+				
+			end
+			
+			a = 1
+			
+			while a <= #Nums do
+				
+				if Nums[ a ] == "!" and type( Nums[ a - 1 ] ) == "number" then
+					
+					local x = Nums[ a - 1 ]
+					
+					local Total = 1
+					
+					while x > 0 do
+						
+						Total = Total * x
+						
+						x = x - 1
+						
+					end
+					
+					Nums[ a - 1 ] = Total
+					
+					table.remove( Nums, a )
+					
+				else
+					
+					a = a + 1
+					
+				end
+				
+			end
+			
+			a = 1
+			
+			while a <= #Nums do
+				
+				if Nums[ a ] == "^" and type( Nums[ a - 1 ] ) == "number" and type( Nums[ a + 1 ] ) == "number" then
+					
+					Nums[ a - 1 ] = Nums[ a - 1 ] ^ Nums[ a + 1 ]
+					
+					table.remove( Nums, a )
+					
+					table.remove( Nums, a )
+					
+				else
+					
+					a = a + 1
+					
+				end
+				
+			end
+			
+			a = 1
+			
+			while a <= #Nums do
+				
+				if Nums[ a ] == "%" and type( Nums[ a - 1 ] ) == "number" and type( Nums[ a + 1 ] ) == "number" then
+					
+					Nums[ a - 1 ] = Nums[ a - 1 ] % Nums[ a + 1 ]
+					
+					table.remove( Nums, a )
+					
+					table.remove( Nums, a )
+					
+				else
+					
+					a = a + 1
+					
+				end
+				
+			end
+			
+			a = 1
+			
+			while a <= #Nums do
+				
+				if Nums[ a ] == "*" and type( Nums[ a - 1 ] ) == "number" and type( Nums[ a + 1 ] ) == "number" then
+					
+					Nums[ a - 1 ] = Nums[ a - 1 ] * Nums[ a + 1 ]
+					
+					table.remove( Nums, a )
+					
+					table.remove( Nums, a )
+					
+				elseif Nums[ a ] == "/" and type( Nums[ a - 1 ] ) == "number" and type( Nums[ a + 1 ] ) == "number" then
+					
+					Nums[ a - 1 ] = Nums[ a - 1 ] / Nums[ a + 1 ]
+					
+					table.remove( Nums, a )
+					
+					table.remove( Nums, a )
+					
+				else
+					
+					a = a + 1
+					
+				end
+				
+			end
+			
+			a = 1
+			
+			while a <= #Nums do
+				
+				if Nums[ a ] == "+" and type( Nums[ a - 1 ] ) == "number" and type( Nums[ a + 1 ] ) == "number" then
+					
+					Nums[ a - 1 ] = Nums[ a - 1 ] + Nums[ a + 1 ]
+					
+					table.remove( Nums, a )
+					
+					table.remove( Nums, a )
+					
+				elseif Nums[ a ] == "-" and type( Nums[ a - 1 ] ) == "number" and type( Nums[ a + 1 ] ) == "number" then
+					
+					Nums[ a - 1 ] = Nums[ a - 1 ] - Nums[ a + 1 ]
+					
+					table.remove( Nums, a )
+					
+					table.remove( Nums, a )
+					
+				elseif a ~= 1 and type( Nums[ a ] ) == "number" and Nums[ a ] < 0 and type( Nums[ a - 1 ] ) == "number" then
+					
+					Nums[ a - 1 ] = Nums[ a - 1 ] + Nums[ a ]
+					
+					table.remove( Nums, a )
+					
+				else
+					
+					a = a + 1
+					
+				end
+				
+			end
+			
+			if Attempt then
+				
+				return #Nums == 1 and Nums[ 1 ] or Nums
+				
+			elseif #Nums == 1 then
+				
+				return Nums[ 1 ]
+				
+			else
+				
+				local Invalid = ""
+				
+				for _, Num in ipairs( Nums ) do
+					
+					if type( Num ) ~= "number" and not Num:find( "%W" ) then
+						
+						Invalid = Invalid .. Num .. ", "
+						
+					end
+					
+				end
+				
+				if Invalid ~= "" then
+					
+					error( "Unknown variable(s)/function(s) - " .. Invalid:sub( 1, -3 ) )
+					
+				end
+				
+				for _, Num in ipairs( Nums )do
+					
+					if type( Num ) == "string" and Num:find( "%W" ) then
+						
+						Invalid = Invalid .. Num .. ", "
+						
+					end
+					
+				end
+				
+				if Invalid ~= "" then
+					
+					error( "Invalid operator(s) - " .. Invalid:sub( 1, -3 ) )
+					
+				end
+				
+			end
+			
+		end
+		
+		function Interpret( Formula, LocalVars )
+			
+			local Ins = { { } }
+			
+			local Var
+			
+			for M1, M2 in string.gmatch( Formula, "(-?%d*%.?%d*)(%D?)" ) do
+				
+				if Var then
+					
+					Var = Var .. M1
+					
+				elseif M1 ~= "" then
+					
+					Ins[ #Ins ][ #Ins[ #Ins ] + 1 ] = tonumber( M1 )
+					
+				end
+				
+				if M2 == "(" then
+					
+					if Var then
+						
+						Ins[ #Ins ][ #Ins[ #Ins ] + 1 ] = LocalVars[ Var ] or math[ Var ] or LuaMathFuncs[ Var ] or Var
+						
+						Var = nil
+						
+					end
+					
+					local In = { }
+					
+					Ins[ #Ins ][ #Ins[ #Ins ] + 1 ] = In
+					
+					Ins[ #Ins + 1 ] = In
+					
+				elseif M2 == ")" then
+					
+					if Var then
+						
+						Ins[ #Ins ][ #Ins[ #Ins ] + 1 ] = LocalVars[ Var ] or math[ Var ] or LuaMathFuncs[ Var ] or Var
+						
+						Var = nil
+						
+					end
+					
+					Ins[ #Ins ] = nil
+					
+				elseif M2:find("%W") then
+					
+					if Var then
+						
+						Ins[ #Ins ][ #Ins[ #Ins ] + 1 ] = LocalVars[ Var ] or math[ Var ] or LuaMathFuncs[ Var ] or Var
+						
+						Var = nil
+						
+					end
+					
+					Ins[ #Ins ][ #Ins[ #Ins ] + 1 ] = M2
+					
+				elseif M2 ~= "" then
+					
+					Var = Var and ( Var .. M2 ) or M2
+					
+				end
+				
+			end
+			
+			if Var then
+				
+				Ins[ #Ins ][ #Ins[ #Ins ] + 1 ] = LocalVars[ Var ] or math[ Var ] or LuaMathFuncs[ Var ] or Var
+				
+			end
+			
+			return Ins[ 1 ]
+			
+		end
+		
+		return function ( Formula, LocalVars, LocalFuncs )
+			
+			if tonumber( Formula ) then return tonumber( Formula ) end
+			
+			local LocalVars, LocalFuncs = LocalVars or { }, LocalFuncs or { }
+			
+			Formula = Formula:gsub( "%s+", "" )
+			
+			if Formula:find("%;") then
+				-- Split the string into variables/functions and the actual expression
+		        local LastSplit = Formula:reverse( ):find( ";" )
+				
+				local Locals
+				
+		        Formula, Locals = Formula:sub( -LastSplit + 1 ), string.split( Formula:sub( 1, -LastSplit - 1 ), ";" )
+				-- Iterates through the user defined variables / functions and interpret them
+				for _, Local in ipairs( Locals ) do
+					
+					local Name, Value = Local:match( "(.+)=(.+)" )
+					
+					if not Name then error( "Invalid local function/variable - " .. Local ) end
+					
+					local FuncName, Args = Name:match( "(%w+)(%b())" )
+					
+					if FuncName then
+						
+						Args = string.split( Args:sub( 2, -2 ), "," )
+						
+						local Func = ToNumber( Interpret( Value, LocalVars ), LocalFuncs, true )
+						
+						LocalFuncs[ FuncName ] = type( Func ) == "number" and Func or { Func, Args }
+						
+					else
+						
+						local Ran, Result = pcall( ToNumber, Interpret( Value, LocalVars ), LocalFuncs )
+						
+						if not Ran then
+							
+							error( "Local variable " .. Name .. " could not be calculated\n" .. Result:sub( -Result:reverse( ):find( ":" ) + 2 ) )
+							
+						end
+						
+						LocalVars[ Name ] = Result
+						
+					end
+					
+				end
+				
+			end
+			
+			local Ran, Result = pcall( ToNumber, Interpret( Formula, LocalVars ), LocalFuncs )
+			
+			if not Ran then
+				
+				error( Result:sub( -Result:reverse( ):find( ":" ) + 2 ) )
+				
+			end
+			
+			return type( Result ) == "number" and Result or error( "Formula could not be calculated" )
+			
+		end
+	end
+	fake_module_scripts[script] = module_script
+end
+
+
+-- Scripts:
+
+local function ERTJ_fake_script() -- y.LocalScript 
+	local script = Instance.new('LocalScript', y)
+	local req = require
+	local require = function(obj)
+		local fake = fake_module_scripts[obj]
+		if fake then
+			return fake()
+		end
+		return req(obj)
+	end
+
+	local GraphModule = script:WaitForChild("Graph")
+	local StringCalculatorModule = script:WaitForChild("StringCalculator")
+	
+	local GraphRenderer = require(GraphModule)
+	local StringCalculator = require(StringCalculatorModule)
+	
+	local GraphHandler = GraphRenderer.new(script.Parent.Graph)
+	
+	local data = table.create(200)
+	
+	script.Parent.TextButton.MouseButton1Click:Connect(function()
+		for i=0, 200, 1 do
+			data[i] = StringCalculator(script.Parent.TextBox.Text, {x=i, TIME=os.time()})
+		end
+		GraphHandler.Resolution = 200
+		GraphHandler.Data = {Graph = data}
+	end)
+end
+coroutine.wrap(ERTJ_fake_script)()

@@ -1,0 +1,66 @@
+-- TimeUtil Module
+-- Provides functions to calculate time to reach positions and fall times
+
+local TimeUtil = {}
+
+------------------------------------------------------------
+-- TimeToReach (linear distance)
+------------------------------------------------------------
+function TimeUtil.TimeToReach(fromPos: Vector3, toPos: Vector3, speed: number)
+	if speed <= 0 then
+		return math.huge
+	end
+	return (toPos - fromPos).Magnitude / speed
+end
+
+------------------------------------------------------------
+-- TimeToReach with moving target (iterative prediction)
+------------------------------------------------------------
+function TimeUtil.TimeToReachMoving(
+	fromPos: Vector3,
+	targetPos: Vector3,
+	targetVelocity: Vector3,
+	speed: number,
+	iterations: number?
+)
+	iterations = iterations or 3
+
+	local time = (targetPos - fromPos).Magnitude / speed
+
+	for _ = 1, iterations do
+		local predictedPos = targetPos + targetVelocity * time
+		time = (predictedPos - fromPos).Magnitude / speed
+	end
+
+	return time
+end
+
+------------------------------------------------------------
+-- TimeToFall
+-- Calculates how long it takes to fall a given height
+------------------------------------------------------------
+function TimeUtil.TimeToFall(height: number, gravity: number?)
+	gravity = gravity or workspace.Gravity or 196.2
+	if height <= 0 then return 0 end
+	return math.sqrt(2 * height / gravity)
+end
+
+------------------------------------------------------------
+-- Optional helper: get height to ground using Raycast
+------------------------------------------------------------
+function TimeUtil.GetHeightToGround(origin: Vector3, maxDistance: number?)
+	maxDistance = maxDistance or 5000
+	local raycastParams = RaycastParams.new()
+	raycastParams.FilterDescendantsInstances = {}
+	raycastParams.FilterType = Enum.RaycastFilterType.Blacklist
+	raycastParams.IgnoreWater = true
+
+	local result = workspace:Raycast(origin, Vector3.new(0, -maxDistance, 0), raycastParams)
+	if result then
+		return origin.Y - result.Position.Y
+	else
+		return 0
+	end
+end
+
+return TimeUtil
