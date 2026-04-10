@@ -1,5 +1,5 @@
 -- ============================================================================
--- RAKNET SPY - CUSTOM UI VERSION
+-- RAKNET SPY - ENHANCED UI VERSION v5.4
 -- ============================================================================
 
 -- ============================================================================
@@ -10,7 +10,7 @@ local CONFIG = {
     MOCK_PACKET_INTERVAL = 0.08,
     UI_UPDATE_INTERVAL = 0.5,
     MAX_VISIBLE_PACKETS = 500,
-    VERSION = "5.3"
+    VERSION = "5.4"
 }
 
 local PACKET_NAMES = {
@@ -88,7 +88,8 @@ local RakNetSpy = {
         packet_row_map = {},
         details_text = nil,
         stats_label = nil,
-        scroll_frame = nil
+        scroll_frame = nil,
+        context_menu = nil
     }
 }
 
@@ -149,7 +150,7 @@ function Packet:getFormatted()
             table.insert(chunk, string.format("%02X", byte))
             table.insert(ascii, (byte >= 32 and byte <= 126) and string.char(byte) or ".")
         end
-        table.insert(chunks, string.format("%-47s  %s", table.concat(chunk, " "), table.concat(ascii)))
+        table.insert(chunks, string.format("%-47s %s", table.concat(chunk, " "), table.concat(ascii)))
     end
     return table.concat(chunks, "\n")
 end
@@ -160,6 +161,31 @@ end
 
 function Packet:hasTag(tag)
     return self.tags[tag] == true
+end
+
+function Packet:toJSON()
+    return string.format(
+        '{"id":%d,"name":"%s","direction":"%s","size":%d,"timestamp":%.3f,"hex":"%s"}',
+        self.id,
+        self:getName(),
+        self.direction,
+        self.size,
+        self.timestamp,
+        self:getFullHex()
+    )
+end
+
+function Packet:toCSV()
+    return string.format(
+        '%d,0x%02X,%s,%s,%d,%.3f,"%s"',
+        self.number,
+        self.id,
+        self:getName(),
+        self.direction,
+        self.size,
+        self.timestamp,
+        self:getFullHex()
+    )
 end
 
 -- ============================================================================
@@ -178,6 +204,50 @@ local function formatTime(seconds)
     local minutes = math.floor((seconds % 3600) / 60)
     local secs = seconds % 60
     return string.format("%02d:%02d:%02d", hours, minutes, secs)
+end
+
+-- ============================================================================
+-- EXPORT FUNCTIONS
+-- ============================================================================
+local function exportToJSON(packets)
+    local json_packets = {}
+    for _, packet in ipairs(packets) do
+        table.insert(json_packets, packet:toJSON())
+    end
+    return "[\n  " .. table.concat(json_packets, ",\n  ") .. "\n]"
+end
+
+local function exportToCSV(packets)
+    local csv = {"#,ID,Name,Direction,Size,Timestamp,HexData"}
+    for _, packet in ipairs(packets) do
+        table.insert(csv, packet:toCSV())
+    end
+    return table.concat(csv, "\n")
+end
+
+local function exportToText(packets)
+    local lines = {
+        "═══════════════════════════════════════════════════════════",
+        "RAKNET SPY - PACKET EXPORT",
+        string.format("Generated: %s", os.date("%Y-%m-%d %H:%M:%S")),
+        string.format("Total Packets: %d", #packets),
+        "═══════════════════════════════════════════════════════════",
+        ""
+    }
+    
+    for _, packet in ipairs(packets) do
+        table.insert(lines, string.format("───── PACKET #%d ─────", packet.number))
+        table.insert(lines, string.format("ID:        0x%02X (%d)", packet.id, packet.id))
+        table.insert(lines, string.format("Name:      %s", packet:getName()))
+        table.insert(lines, string.format("Direction: %s", packet.direction))
+        table.insert(lines, string.format("Size:      %d bytes", packet.size))
+        table.insert(lines, string.format("Timestamp: %.3f", packet.timestamp))
+        table.insert(lines, "")
+        table.insert(lines, packet:getFormatted())
+        table.insert(lines, "")
+    end
+    
+    return table.concat(lines, "\n")
 end
 
 -- ============================================================================
@@ -528,6 +598,73 @@ function UILib:CreateWindow(title)
         ContentFrame = contentFrame,
         Elements = {}
     }
+end
+
+function UILib:CreateContextMenu(parent)
+    local contextMenu = self:Create("Frame", {
+        Name = "ContextMenu",
+        Size = UDim2.new(0, 180, 0, 0),
+        Position = UDim2.new(0, 0, 0, 0),
+        BackgroundColor3 = COLORS.Primary,
+        BorderSizePixel = 1,
+        BorderColor3 = COLORS.Border,
+        Visible = false,
+        ZIndex = 1000,
+        Parent = parent
+    })
+    
+    self:Create("UICorner", {
+        CornerRadius = UDim.new(0, 4),
+        Parent = contextMenu
+    })
+    
+    local listLayout = self:Create("UIListLayout", {
+        Padding = UDim.new(0, 1),
+        SortOrder = Enum.SortOrder.LayoutOrder,
+        Parent = contextMenu
+    })
+    
+    listLayout:GetPropertyChangedSignal("AbsoluteContentSize"):Connect(function()
+        contextMenu.Size = UDim2.new(0, 180, 0, listLayout.AbsoluteContentSize.Y + 4)
+    end)
+    
+    return contextMenu
+end
+
+function UILib:AddContextMenuItem(menu, text, callback)
+    local menuItem = self:Create("TextButton", {
+        Name = text:gsub("%s+", ""),
+        Size = UDim2.new(1, -4, 0, 26),
+        Position = UDim2.new(0, 2, 0, 0),
+        BackgroundColor3 = COLORS.Accent,
+        Text = text,
+        TextColor3 = COLORS.Text,
+        TextSize = 11,
+        Font = Enum.Font.Gotham,
+        TextXAlignment = Enum.TextXAlignment.Left,
+        Parent = menu
+    })
+    
+    self:Create("UIPadding", {
+        PaddingLeft = UDim.new(0, 8),
+        PaddingRight = UDim.new(0, 8),
+        Parent = menuItem
+    })
+    
+    menuItem.MouseButton1Click:Connect(function()
+        menu.Visible = false
+        if callback then callback() end
+    end)
+    
+    menuItem.MouseEnter:Connect(function()
+        menuItem.BackgroundColor3 = COLORS.Selected
+    end)
+    
+    menuItem.MouseLeave:Connect(function()
+        menuItem.BackgroundColor3 = COLORS.Accent
+    end)
+    
+    return menuItem
 end
 
 function UILib:CreateTabBar(parent, tabs)
@@ -933,6 +1070,11 @@ function UILib:CreatePacketRow(parent, packet, columns, index)
         updateSelectedRow()
     end)
     
+    -- Right-click context menu
+    row.MouseButton2Click:Connect(function()
+        showContextMenu(packet, row)
+    end)
+    
     row.MouseEnter:Connect(function()
         if RakNetSpy.selected_packet ~= packet then
             row.BackgroundColor3 = COLORS.Primary
@@ -953,7 +1095,101 @@ end
 -- ============================================================================
 local UI = UILib:CreateWindow(string.format("RakNet Spy v%s", CONFIG.VERSION))
 
-local tabBar, tabButtons = UILib:CreateTabBar(UI.ContentFrame, {"Main", "Packets", "Details", "Tools", "Stats"})
+-- Create context menu
+local contextMenu = UILib:CreateContextMenu(UI.ScreenGui)
+RakNetSpy.ui.context_menu = contextMenu
+
+-- Context menu items
+UILib:AddContextMenuItem(contextMenu, "📋 Copy Hex", function()
+    if RakNetSpy.selected_packet then
+        setclipboard(RakNetSpy.selected_packet:getFullHex())
+    end
+end)
+
+UILib:AddContextMenuItem(contextMenu, "📝 Copy as JSON", function()
+    if RakNetSpy.selected_packet then
+        setclipboard(RakNetSpy.selected_packet:toJSON())
+    end
+end)
+
+UILib:AddContextMenuItem(contextMenu, "🔁 Replay Packet", function()
+    if RakNetSpy.selected_packet then
+        local p = RakNetSpy.selected_packet
+        injectPacket(p.id, p.data)
+    end
+end)
+
+UILib:AddContextMenuItem(contextMenu, "🔧 Load to Forge", function()
+    if RakNetSpy.selected_packet then
+        local p = RakNetSpy.selected_packet
+        if forgeIdBox and forgeDataBox then
+            forgeIdBox.Text = string.format("0x%02X", p.id)
+            forgeDataBox.Text = p:getFullHex()
+            -- Switch to Tools tab
+            for name, content in pairs(tabs) do
+                content.Visible = (name == "Tools")
+                tabButtons[name].BackgroundColor3 = (name == "Tools") and COLORS.Success or COLORS.Accent
+            end
+            RakNetSpy.ui.current_tab = "Tools"
+        end
+    end
+end)
+
+UILib:AddContextMenuItem(contextMenu, "🚫 Blacklist ID", function()
+    if RakNetSpy.selected_packet then
+        RakNetSpy.blacklist[RakNetSpy.selected_packet.id] = true
+    end
+end)
+
+UILib:AddContextMenuItem(contextMenu, "🔍 Filter by ID", function()
+    if RakNetSpy.selected_packet then
+        RakNetSpy.id_filter = RakNetSpy.selected_packet.id
+        RakNetSpy.needs_full_refresh = true
+    end
+end)
+
+UILib:AddContextMenuItem(contextMenu, "❌ Clear Filters", function()
+    RakNetSpy.id_filter = nil
+    RakNetSpy.text_filter = ""
+    RakNetSpy.dir_filter = 0
+    RakNetSpy.needs_full_refresh = true
+end)
+
+-- Hide context menu when clicking elsewhere
+game:GetService("UserInputService").InputBegan:Connect(function(input)
+    if input.UserInputType == Enum.UserInputType.MouseButton1 or 
+       input.UserInputType == Enum.UserInputType.MouseButton2 then
+        if contextMenu.Visible then
+            contextMenu.Visible = false
+        end
+    end
+end)
+
+function showContextMenu(packet, row)
+    RakNetSpy.selected_packet = packet
+    updatePacketDetails()
+    updateSelectedRow()
+    
+    local mousePos = game:GetService("UserInputService"):GetMouseLocation()
+    local screenSize = workspace.CurrentCamera.ViewportSize
+    
+    -- Position context menu at mouse, but keep it on screen
+    local xPos = mousePos.X
+    local yPos = mousePos.Y - 36 -- Adjust for top bar
+    
+    if xPos + 180 > screenSize.X then
+        xPos = screenSize.X - 180
+    end
+    
+    if yPos + contextMenu.AbsoluteSize.Y > screenSize.Y then
+        yPos = screenSize.Y - contextMenu.AbsoluteSize.Y
+    end
+    
+    contextMenu.Position = UDim2.new(0, xPos, 0, yPos)
+    contextMenu.Visible = true
+end
+
+local tabBar, tabButtons = UILib:CreateTabBar(UI.ContentFrame, {"Main", "Packets", "Details", "Tools", "Export", "Stats"})
 
 -- Tab content containers
 local tabs = {}
@@ -1257,6 +1493,82 @@ UILib:CreateButton(toolsScroll, "Replay Selected Packet", function()
     if RakNetSpy.selected_packet then
         local p = RakNetSpy.selected_packet
         injectPacket(p.id, p.data)
+    end
+end, UDim2.new(0, 5, 0, yPos))
+
+-- ============================================================================
+-- EXPORT TAB
+-- ============================================================================
+local exportScroll = UILib:CreateScrollFrame(tabs["Export"])
+
+yPos = 5
+
+UILib:CreateLabel(exportScroll, "Export Packets to Clipboard", UDim2.new(0, 5, 0, yPos))
+yPos = yPos + 30
+
+UILib:CreateButton(exportScroll, "📄 Export All as JSON", function()
+    local json = exportToJSON(RakNetSpy.packets)
+    setclipboard(json)
+end, UDim2.new(0, 5, 0, yPos))
+yPos = yPos + 30
+
+UILib:CreateButton(exportScroll, "📊 Export All as CSV", function()
+    local csv = exportToCSV(RakNetSpy.packets)
+    setclipboard(csv)
+end, UDim2.new(0, 5, 0, yPos))
+yPos = yPos + 30
+
+UILib:CreateButton(exportScroll, "📝 Export All as Text", function()
+    local text = exportToText(RakNetSpy.packets)
+    setclipboard(text)
+end, UDim2.new(0, 5, 0, yPos))
+yPos = yPos + 35
+
+UILib:CreateLabel(exportScroll, "Export Filtered Packets", UDim2.new(0, 5, 0, yPos))
+yPos = yPos + 30
+
+UILib:CreateButton(exportScroll, "📄 Export Filtered as JSON", function()
+    local filtered = filterPackets()
+    local json = exportToJSON(filtered)
+    setclipboard(json)
+end, UDim2.new(0, 5, 0, yPos))
+yPos = yPos + 30
+
+UILib:CreateButton(exportScroll, "📊 Export Filtered as CSV", function()
+    local filtered = filterPackets()
+    local csv = exportToCSV(filtered)
+    setclipboard(csv)
+end, UDim2.new(0, 5, 0, yPos))
+yPos = yPos + 30
+
+UILib:CreateButton(exportScroll, "📝 Export Filtered as Text", function()
+    local filtered = filterPackets()
+    local text = exportToText(filtered)
+    setclipboard(text)
+end, UDim2.new(0, 5, 0, yPos))
+yPos = yPos + 35
+
+UILib:CreateLabel(exportScroll, "Export Selected Packet", UDim2.new(0, 5, 0, yPos))
+yPos = yPos + 30
+
+UILib:CreateButton(exportScroll, "📄 Export Selected as JSON", function()
+    if RakNetSpy.selected_packet then
+        setclipboard(RakNetSpy.selected_packet:toJSON())
+    end
+end, UDim2.new(0, 5, 0, yPos))
+yPos = yPos + 30
+
+UILib:CreateButton(exportScroll, "📋 Export Selected Hex", function()
+    if RakNetSpy.selected_packet then
+        setclipboard(RakNetSpy.selected_packet:getFullHex())
+    end
+end, UDim2.new(0, 5, 0, yPos))
+yPos = yPos + 30
+
+UILib:CreateButton(exportScroll, "📝 Export Selected Details", function()
+    if RakNetSpy.selected_packet then
+        local text = exportToText({RakNetSpy.selected_packet})
+        setclipboard(text)
     end
 end, UDim2.new(0, 5, 0, yPos))
 
