@@ -254,6 +254,94 @@ circle:Destroy()
 
 
 
+
+# DrawingImmediate.GetPaint
+
+Returns an event that is fired every render step for a specific zindex. Lower value zindex events will fire before higher value events. `DrawingImmediate.*` APIs can only be called under these events.
+
+```lua
+function DrawingImmediate.GetPaint(zindex: int): PsmSignal
+```
+
+## Parameters
+- `zindex` *(int, required)* — The zindex that the event will fire on.
+
+## Example
+
+```lua
+local signal = DrawingImmediate.GetPaint(1)
+local uis = game:GetService("UserInputService")
+
+signal:Connect(function()
+    local mousepos = uis:GetMouseLocation()
+
+    DrawingImmediate.Circle(mousepos, 100, Color3.new(1, 1, 1), 1, 100, 1)
+end)
+```
+
+---
+
+# Functions
+
+## Line
+```lua
+function DrawingImmediate.Line(from: Vector2, to: Vector2, color: Color3, opacity: number, thickness: number): ()
+```
+
+## Circle
+```lua
+function DrawingImmediate.Circle(center: Vector2, radius: number, color: Color3, opacity: number, num_sides: int, thickness: number): ()
+```
+
+## FilledCircle
+```lua
+function DrawingImmediate.FilledCircle(center: Vector2, radius: number, color: Color3, num_sides: int, opacity: number): ()
+```
+
+## Triangle
+```lua
+function DrawingImmediate.Triangle(point_a: Vector2, point_b: Vector2, point_c: Vector2, color: Color3, opacity: number, thickness: number): ()
+```
+
+## FilledTriangle
+```lua
+function DrawingImmediate.FilledTriangle(point_a: Vector2, point_b: Vector2, point_c: Vector2, color: Color3, opacity: number): ()
+```
+
+## Rectangle
+```lua
+function DrawingImmediate.Rectangle(top_left: Vector2, size: Vector2, color: Color3, opacity: number, rounding: number, thickness: number): ()
+```
+
+## FilledRectangle
+```lua
+function DrawingImmediate.FilledRectangle(top_left: Vector2, size: Vector2, color: Color3, opacity: number, rounding: number): ()
+```
+
+## Quad
+```lua
+function DrawingImmediate.Quad(point_a: Vector2, point_b: Vector2, point_c: Vector2, point_d: Vector2, color: Color3, opacity: number, thickness: number): ()
+```
+
+## FilledQuad
+```lua
+function DrawingImmediate.FilledQuad(point_a: Vector2, point_b: Vector2, point_c: Vector2, point_d: Vector2, color: Color3, opacity: number): ()
+```
+
+## Text
+```lua
+function DrawingImmediate.Text(position: Vector2, font: DrawFont, font_size: number, color: Color3, opacity: number, text: string, center: bool): ()
+```
+
+## OutlinedText
+```lua
+function DrawingImmediate.OutlinedText(position: Vector2, font: DrawFont, font_size: number, color: Color3, opacity: number, text: string, center: bool): ()
+```
+
+
+
+
+
 # SILENT AIM METHODS
 
 - Workspace.FindPartOnRay  
