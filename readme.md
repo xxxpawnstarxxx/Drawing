@@ -423,3 +423,53 @@ circle:Destroy()
 - Target.Parent  
 - Target.Name  
 - IsPlayer  
+
+
+# SPEED METHODS
+
+Humanoid.WalkSpeed
+Humanoid.WalkSpeed =
+HumanoidRootPart.Velocity
+HumanoidRootPart.AssemblyLinearVelocity
+BasePart.Velocity
+BasePart.AssemblyLinearVelocity
+CFrame manipulation
+HumanoidRootPart.CFrame
+CFrame.new
+CFrame.lookAt
+root.CFrame + root.CFrame.LookVector
+root.CFrame + root.CFrame.RightVector
+RunService.RenderStepped
+RunService.Heartbeat
+RunService.Stepped
+MoveDirection
+Humanoid.MoveDirection
+BodyVelocity
+BodyVelocity.Velocity
+BodyVelocity.MaxForce
+BodyForce
+LinearVelocity
+LinearVelocity.VectorVelocity
+LinearVelocity.MaxForce
+LinearVelocity.Attachment0
+AlignPosition
+AlignPosition.Position
+AlignPosition.MaxForce
+AlignPosition.Responsiveness
+Attachment.WorldPosition
+Vector3.new
+Character.Humanoid
+Character.HumanoidRootPart
+GetPropertyChangedSignal("WalkSpeed")
+GetPropertyChangedSignal("AssemblyLinearVelocity")
+metatable.__newindex
+hookmetamethod(__newindex)
+hookfunction
+__namecall
+ChildAdded
+Workspace.ChildAdded
+AssemblyLinearVelocity correction
+Velocity boost loop
+Position teleport
+RootPart.Position
+RootPart.CFrame
